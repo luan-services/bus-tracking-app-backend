@@ -34,10 +34,10 @@ app.use(cors());
 app.use(express.json());
 
 // criando os endereços e usando os routes
-app.use("/api/users", userRoutes);
-app.use("/api/lines", lineRoutes);
-app.use("/api/trips", tripRoutes);
-app.use('/api/maintenance', maintenanceRoutes);
+app.use("/api/users", rateLimitHandler(15 * 60 * 1000, 100), userRoutes);
+app.use("/api/lines", rateLimitHandler(15 * 60 * 1000, 100), lineRoutes);
+app.use("/api/trips", rateLimitHandler(15 * 60 * 1000, 100), tripRoutes);
+app.use('/api/maintenance', rateLimitHandler(15 * 60 * 1000, 100), maintenanceRoutes);
 
 // usando errorHandler para tratar erros lançados no app
 app.use(errorHandler);

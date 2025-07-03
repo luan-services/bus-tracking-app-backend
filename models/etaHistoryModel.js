@@ -5,7 +5,7 @@ const etaHistorySchema = new mongoose.Schema(
     line: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Line',
-      required: true,
+      required: [true, 'Line id is required'], 
     },
     from: { type: String, required: true }, // nome da parada
     to: { type: String, required: true },   // nome da parada seguinte

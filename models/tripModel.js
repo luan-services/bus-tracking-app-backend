@@ -4,12 +4,12 @@ const tripSchema = new mongoose.Schema({
 	driver: {
 		type: mongoose.Schema.Types.ObjectId,
 		ref: 'User',
-		required: true,
+		required: [true, 'Driver Id is required'],
 	},
 	line: {
 		type: mongoose.Schema.Types.ObjectId,
 		ref: 'Line',
-		required: true,
+		required: [true, 'Line Id is required'],
 	},
 	startTime: {
 		type: Date,
@@ -20,29 +20,32 @@ const tripSchema = new mongoose.Schema({
 		default: true,
 	},
 	currentPosition: {
-	type: {
-		type: String,
-		enum: ['Point'],
-		default: 'Point',
+		type: {
+			type: String,
+			enum: ['Point'],
+			default: 'Point',
+		},
+		coordinates: {
+			type: [Number], // [lng, lat]
+			default: undefined,
+		},
+		updatedAt: {
+			type: Date,
+			default: Date.now,
+		},
 	},
-	coordinates: {
-		type: [Number], // [lng, lat]
-		default: undefined,
-	},
-	updatedAt: {
-		type: Date,
-		default: Date.now,
-	},},
 	stopsReached: [
-	{
-		stopName: String,
-		reachedAt: Date
-	}],
+		{
+			stopName: String,
+			reachedAt: Date
+		}
+	],
 	stopETAs: [
-	{
-		stopName: String,
-		etaMinutes: Number,
-	},],
+		{
+			stopName: String,
+			etaMinutes: Number,
+		},
+	],
 	},{ timestamps: true }
 );
 
