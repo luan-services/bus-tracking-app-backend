@@ -1,4 +1,4 @@
-import ETAHistory from '../models/etaHistoryModel.js';
+import { ETAHistory } from '../models/etaHistoryModel.js';
 import haversine from 'haversine-distance';
 
 export const calculateETA = async (trip, line) => {

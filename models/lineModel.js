@@ -1,7 +1,10 @@
 import mongoose from 'mongoose';
 
 const stopSchema = new mongoose.Schema({
-    name: { type: String, required: true },
+    name: { 
+      type: String, 
+      required: true 
+    },
     location: {
         type: {
             type: String,
@@ -37,5 +40,4 @@ const lineSchema = new mongoose.Schema({
 lineSchema.index({ 'routePath': '2dsphere' });
 lineSchema.index({ 'stops.location': '2dsphere' });
 
-const Line = mongoose.model('Line', lineSchema);
-export default Line;
+export const Line = mongoose.model('Line', lineSchema);

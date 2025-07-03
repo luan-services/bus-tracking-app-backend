@@ -17,5 +17,4 @@ const etaHistorySchema = new mongoose.Schema(
 
 etaHistorySchema.index({ line: 1, from: 1, to: 1 }, { unique: true });
 
-const ETAHistory = mongoose.model('ETAHistory', etaHistorySchema);
-export default ETAHistory;
+export const ETAHistory = mongoose.model('ETAHistory', etaHistorySchema);

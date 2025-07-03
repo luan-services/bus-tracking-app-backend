@@ -1,11 +1,7 @@
 import express from 'express';
-import {
-  getAllLines,
-  getLineById,
-  createLine
-} from '../controllers/lineController.js';
+import { getAllLines, getLineById, createLine } from '../controllers/lineController.js';
 
-import {validateJwtToken} from "../middleware/validateTokenHandler.js"
+import { validateJwtToken } from "../middleware/validateTokenHandler.js"
 
 const router = express.Router();
 
