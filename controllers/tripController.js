@@ -1,66 +1,102 @@
 import asyncHandler from 'express-async-handler';
-import haversine from 'haversine-distance';
 
 import { Trip } from '../models/tripModel.js';
 import { Line } from '../models/lineModel.js';
 
-import { calculateETA } from '../utils/calculateETA.js';
 import { ETAHistory } from '../models/etaHistoryModel.js';
+
+import turf from '@turf/turf';
+
+// --- HELPER DE ETA (Refatorado) ---
+/**
+ * Calcula o ETA para todas as paradas futuras com base no progresso atual e no histórico.
+ */
+const calculateETAs = async (line, currentDistance) => {
+  const upcomingStops = line.stops.filter(stop => stop.distanceFromStart > currentDistance);
+  if (upcomingStops.length === 0) return [];
+
+  const etas = [];
+  let cumulativeTime = 0;
+  let lastDistance = currentDistance;
+
+  // Calcula o tempo para a primeira parada futura
+  const firstUpcomingStop = upcomingStops[0];
+  const lastReachedStop = line.stops.slice().reverse().find(s => s.distanceFromStart <= currentDistance);
+  
+  if (lastReachedStop) {
+    const etaRecord = await ETAHistory.findOne({
+      line: line._id,
+      from: lastReachedStop.name,
+      to: firstUpcomingStop.name
+    });
+
+    if (etaRecord) {
+      const segmentTotalDistance = firstUpcomingStop.distanceFromStart - lastReachedStop.distanceFromStart;
+      const progressInSegment = (currentDistance - lastReachedStop.distanceFromStart) / segmentTotalDistance;
+      const remainingTimeInSegment = etaRecord.averageDuration * (1 - progressInSegment);
+      cumulativeTime += remainingTimeInSegment;
+      etas.push({ stopName: firstUpcomingStop.name, etaMinutes: Math.round(cumulativeTime) });
+    }
+  }
+
+  // Calcula o tempo para as paradas subsequentes
+  for (let i = 0; i < upcomingStops.length - 1; i++) {
+    const from = upcomingStops[i];
+    const to = upcomingStops[i + 1];
+
+    const etaRecord = await ETAHistory.findOne({
+      line: line._id,
+      from: from.name,
+      to: to.name
+    });
+
+    if (etaRecord && etaRecord.averageDuration) {
+      cumulativeTime += etaRecord.averageDuration;
+      etas.push({ stopName: to.name, etaMinutes: Math.round(cumulativeTime) });
+    }
+  }
+
+  return etas;
+};
+
+////////////////
 
 //@desc Start a trip
 //@route POST /api/trips/start
 //@access private (driver, admin)
 export const startTrip = asyncHandler(async (req, res) => {
-	const { lineId, lat, lng } = req.body;
-
-	// todos os campos são necessário
-	if (!lineId || !lat || !lng) {
-		res.status(400);
-		throw new Error("All fields are mandatory");
-	}
-
-	// checa se a linha existe
-	const line = await Line.findById(lineId);
-	if (!line) {
-		res.status(404);
-		throw new Error("Line not found");
-	}
-
-	// checa se existe um token de autenticação
-	if (!req.user) {
-		res.status(403)
-		throw new Error("User not logged in")
-	}
-
-	// checa se o usuário é um motorista ou admin
-	if (req.user.role == "driver" || req.user.role == "admin") {
-
-		// check if driver already has an active trip
-		const existingTrip = await Trip.findOne({
-			driver: req.user.id,
-			isActive: true,
-		});
-		if (existingTrip) {
-			res.status(400);
-			throw new Error(`User already have an active trip ${existingTrip.id}`);
-		}
-
-		// começa uma trip
-		const trip = await Trip.create({
-			driver: req.user.id,
-			line: lineId,
-			currentPosition: { 
-				type: 'Point',
-				coordinates: [lng, lat], // lembre-se: [longitude, latitude]
-				updatedAt: new Date(),
-			},
-		});
-
-		return res.status(201).json({ message: "Trip started successfully", trip: trip});
-	} else {
-		res.status(403)
-		throw new Error("Logged user is not a driver")
-	}
+    const { lineId, lat, lng } = req.body;
+    if (!lineId || !lat || !lng) {
+        res.status(400);
+        throw new Error("All fields are mandatory");
+    }
+    const line = await Line.findById(lineId);
+    if (!line) {
+        res.status(404);
+        throw new Error("Line not found");
+    }
+    if (!req.user || (req.user.role !== "driver" && req.user.role !== "admin")) {
+        res.status(403);
+        throw new Error("User not authorized or not logged in");
+    }
+    const existingTrip = await Trip.findOne({ driver: req.user.id, isActive: true });
+    if (existingTrip) {
+        res.status(400);
+        throw new Error(`User already has an active trip ${existingTrip.id}`);
+    }
+    const initialPosition = { type: 'Point', coordinates: [lng, lat] };
+    const routeLineString = turf.lineString(line.routePath.coordinates);
+    const snapped = turf.nearestPointOnLine(routeLineString, initialPosition, { units: 'kilometers' });
+    const distanceTraveledInitial = snapped.properties.location;
+    const trip = await Trip.create({
+        driver: req.user.id,
+        line: lineId,
+        currentPosition: { ...initialPosition, updatedAt: new Date() },
+        lastPosition: initialPosition,
+        distanceTraveled: distanceTraveledInitial,
+        stopsReached: [],
+    });
+    return res.status(201).json({ message: "Trip started successfully", trip: trip });
 });
 
 //@desc Update position on a trip
@@ -71,67 +107,95 @@ export const updatePosition = asyncHandler(async (req, res) => {
 	const { lat, lng } = req.body;
 
 	if (!lat || !lng) {
-		res.status(400);
-		throw new Error("All fields are mandatory");
+		res.status(400).json({ message: 'Latitude e longitude obrigatórias' });
+		return;
 	}
 
-	const trip = await Trip.findById(tripId);
+	const trip = await Trip.findById(tripId).populate({
+		path: 'line',
+		model: 'Line'
+	});
+
 	if (!trip || !trip.isActive) {
-		res.status(404);
-		throw new Error('Trip not found or already ended');
+		res.status(404).json({ message: 'Viagem não encontrada ou finalizada' });
+		return;
 	}
-
-	// Verifica se o motorista logado é o dono da trip
-	if (trip.driver.toString() !== req.user.id) {
-		res.status(403);
-		throw new Error("User is not the owner of this trip");
-  	}
-
-	trip.currentPosition = {
-		type: 'Point',
-		coordinates: [lng, lat],
-		updatedAt: new Date(),
-	};
-
 	
-	const line = await Line.findById(trip.line);
-	trip.stopETAs = await calculateETA(trip, line);
+	// O driver pode ser validado aqui, se necessário
 
-	// Verifica se passou por alguma parada ainda não registrada
-	for (const stop of line.stops) {
-		const stopAlreadyReached = trip.stopsReached.some(
-			(s) => s.stopName === stop.name
+	const line = trip.line;
+	const newPosition = { type: 'Point', coordinates: [lng, lat] };
+
+	// --- LÓGICA DE PROGRESSO CONTÍNUO ---
+	if (trip.lastPosition?.coordinates?.length === 2) {
+		const distanceIncrement = turf.distance(
+		trip.lastPosition.coordinates,
+		newPosition.coordinates,
+		{ units: 'kilometers' }
 		);
+		trip.distanceTraveled += distanceIncrement;
+	}
+	
+	trip.currentPosition = { ...newPosition, updatedAt: new Date() };
+	trip.lastPosition = newPosition;
 
-		if (stopAlreadyReached) continue;
+	// --- LÓGICA PARA MARCAR PARADAS E SALVAR HISTÓRICO ---
+	for (const stop of line.stops) {
+		const alreadyReached = trip.stopsReached.some(s => s.stopName === stop.name);
+		if (alreadyReached) continue;
 
-		const stopPoint = {
-			lat: stop.location.coordinates[1],
-			lng: stop.location.coordinates[0],
-		};
+		// Usa a distância pré-calculada para checar se a parada foi ultrapassada
+		if (trip.distanceTraveled >= stop.distanceFromStart) {
+		const now = new Date();
+		const lastReached = trip.stopsReached[trip.stopsReached.length - 1];
 
-		const busPoint = { lat, lng };
-		const distance = haversine(busPoint, stopPoint);
+		// Se houver uma parada anterior, salva o tempo de viagem entre elas
+		if (lastReached) {
+			const from = lastReached.stopName;
+			const to = stop.name;
+			const newDuration = (now - new Date(lastReached.reachedAt)) / 60000; // minutos
 
-		if (distance < 100) { // Parada atingida
-			trip.stopsReached.push({
-			stopName: stop.name,
-			reachedAt: new Date(),
+			// Lógica correta para atualizar a média real
+			let etaRecord = await ETAHistory.findOne({ line: line._id, from, to });
+			if (etaRecord) {
+			const oldTotalDuration = etaRecord.averageDuration * etaRecord.sampleCount;
+			const newSampleCount = etaRecord.sampleCount + 1;
+			etaRecord.averageDuration = (oldTotalDuration + newDuration) / newSampleCount;
+			etaRecord.sampleCount = newSampleCount;
+			} else {
+			etaRecord = new ETAHistory({
+				line: line._id, from, to, averageDuration: newDuration, sampleCount: 1
 			});
+			}
+			await etaRecord.save();
+		}
+		trip.stopsReached.push({ stopName: stop.name, reachedAt: now });
 		}
 	}
-	
+
+	// --- ATUALIZAÇÃO DE ETAs E SALVAMENTO ---
+	trip.stopETAs = await calculateETAs(line, trip.distanceTraveled);
 	await trip.save();
 
+	// --- EMISSÃO VIA SOCKET.IO ---
 	const io = req.app.get('io');
-
 	io.to(tripId).emit('positionUpdate', {
 		coordinates: trip.currentPosition.coordinates,
 		stopETAs: trip.stopETAs,
 	});
 
-	return res.status(200).json({ message: "Position updated successfully" });
+	res.status(200).json({ 
+		message: 'Posição atualizada com sucesso',
+		currentProgress: trip.distanceTraveled / turf.length(turf.lineString(line.routePath.coordinates), { units: 'kilometers' }), // Apenas para debug
+		stopETAs: trip.stopETAs 
+	});
 });
+
+
+
+
+
+
 
 //@desc End a trip
 //@route PATCH /api/trips/:tripid/end

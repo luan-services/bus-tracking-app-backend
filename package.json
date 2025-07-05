@@ -12,6 +12,7 @@
   "author": "Luan Peixoto",
   "license": "MIT",
   "dependencies": {
+    "@turf/turf": "^7.2.0",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^17.0.1",

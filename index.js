@@ -2,7 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import http from "http"
-
+import { rateLimitHandler } from "./middleware/rateLimitHandler.js";
 // import do banco de dados
 import { connectDatabase } from "./config/connectDatabase.js";
 

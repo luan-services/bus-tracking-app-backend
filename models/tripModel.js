@@ -34,6 +34,19 @@ const tripSchema = new mongoose.Schema({
 			default: Date.now,
 		},
 	},
+	lastPosition: {
+		type: {
+			type: String,
+			enum: ['Point'],
+		},
+		coordinates: {
+			type: [Number],
+		},
+  	},
+	distanceTraveled: {
+		type: Number,
+		default: 0
+	},
 	stopsReached: [
 		{
 			stopName: String,
@@ -52,3 +65,5 @@ const tripSchema = new mongoose.Schema({
 tripSchema.index({ 'currentPosition': '2dsphere' });
 
 export const Trip = mongoose.model('Trip', tripSchema);
+
+

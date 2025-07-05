@@ -15,7 +15,13 @@ const stopSchema = new mongoose.Schema({
             type: [Number], // [lng, lat]
             required: [true, 'Stop coords is required'],
         }
-    }
+    },
+	stopProgress: {
+		type: Number
+	},
+	distanceFromStart: {
+		type: Number
+	}
 });
 
 const lineSchema = new mongoose.Schema({
@@ -33,13 +39,13 @@ const lineSchema = new mongoose.Schema({
 	stops: [stopSchema],
 	routePath: {
 		type: {
-		type: String,
-		enum: ['LineString'],
-		required: true
+			type: String,
+			enum: ['LineString'],
+			required: true
 		},
-		coordinates: {
-		type: [[Number]], // [lng, lat]
-		required: true
+			coordinates: {
+			type: [[Number]], // [lng, lat]
+			required: true
 		}
 	}
 }, { timestamps: true });
