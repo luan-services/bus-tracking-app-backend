@@ -33,45 +33,32 @@ export const getLineById = asyncHandler(async (req, res) => {
 //@route POST /api/lines/
 //@access private (admin)
 export const createLine = asyncHandler(async (req, res) => {
-
-    if (!req.user || req.user.role != "admin") {
-        res.status(403)
-        throw new Error("Logged user is not an admin")
+    if (!req.user || req.user.role !== "admin") {
+        res.status(403);
+        throw new Error("Usuário logado não é um administrador");
     }
 
     const { lineNumber, name, schedule, itinerary, stops, routePath } = req.body;
 
-    if (!lineNumber || !name || !schedule || !itinerary || !stops || !routePath ) {
-        res.status(400)
-        throw new Error("All fields are mandatory")
+    if (!lineNumber || !name || !schedule || !itinerary || !stops || !routePath) {
+        res.status(400);
+        throw new Error("Todos os campos são obrigatórios");
     }
 
-    // Cria a linha no banco de dados
     const line = await Line.create({ 
-            lineNumber: lineNumber,
-            name: name,
-            schedule: schedule,
-            itinerary: itinerary,
-            stops: stops,
-            routePath: routePath
+        lineNumber, name, schedule, itinerary, stops, routePath
     });
 
     if (line) {
         try {
-            // 2. Chame a função de pré-cálculo após a criação bem-sucedida
             await precalculateStopData(line._id);
         } catch (error) {
-            // Loga um erro se o pré-cálculo falhar, mas não impede a resposta,
-            // pois a linha já foi criada. Isso pode ser ajustado se o pré-cálculo for crítico.
             console.error(`Falha ao pré-calcular dados para a linha ${line._id}:`, error);
         }
-
-        // 3. Busca a linha novamente para retornar o documento completo com os dados pré-calculados
         const updatedLine = await Line.findById(line._id);
         return res.status(201).json(updatedLine);
-
     } else {
         res.status(400);
-        throw new Error("Invalid line data");
+        throw new Error("Dados da linha inválidos");
     }
 });

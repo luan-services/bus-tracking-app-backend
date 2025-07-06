@@ -42,11 +42,18 @@ const tripSchema = new mongoose.Schema({
 		coordinates: {
 			type: [Number],
 		},
+		updatedAt: {
+			type: Date,
+		},
   	},
 	distanceTraveled: {
 		type: Number,
 		default: 0
 	},
+	isOffRoute: {
+		type: Boolean,
+		default: false
+  	},
 	stopsReached: [
 		{
 			stopName: String,
