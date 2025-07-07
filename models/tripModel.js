@@ -50,10 +50,6 @@ const tripSchema = new mongoose.Schema({
 		type: Number,
 		default: 0
 	},
-	isOffRoute: {
-		type: Boolean,
-		default: false
-  	},
 	stopsReached: [
 		{
 			stopName: String,
