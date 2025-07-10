@@ -72,13 +72,10 @@ const calculateETAs = async (line, currentDistance, stopsReached) => {
 
 // --- NOVA FUNÇÃO HELPER ---
 const markStopAsReached = async (trip, stopToReach, line, timestamp) => {
-    
-        console.log(`stop ${stopToReach.name} ${stopToReach.location.coordinates}  teste do return`)
     if (trip.stopsReached.some(s => s.stopName === stopToReach.name)) {
+        
         return; 
     }
-    
-     console.log(`stop ${stopToReach.name} ${stopToReach.location.coordinates}  passou teste do return`)
 
     const lastReachedStopRecord = trip.stopsReached[trip.stopsReached.length - 1];
     const fromStopName = lastReachedStopRecord ? lastReachedStopRecord.stopName : "START_OF_LINE";
@@ -90,8 +87,6 @@ const markStopAsReached = async (trip, stopToReach, line, timestamp) => {
     const etaRecord = await ETAHistory.findOne(key);
 
     if (etaRecord) {
-        
-        console.log(`stop ${stopToReach.name} ${stopToReach.location.coordinates}  tem eta record`)
         // Se o registro existe, calculamos a nova média em memória
         const oldTotalDuration = etaRecord.averageDuration * etaRecord.sampleCount;
         const newSampleCount = etaRecord.sampleCount + 1;
@@ -101,7 +96,6 @@ const markStopAsReached = async (trip, stopToReach, line, timestamp) => {
         await etaRecord.save();
     } else {
         // Se não existe, criamos um novo (1 escrita)
-        console.log(`stop ${stopToReach.name} ${stopToReach.location.coordinates}  nao tem eta record`)
         await ETAHistory.create({ ...key, averageDuration: durationMinutes, sampleCount: 1 });
     }
     // --- FIM DA LÓGICA OTIMIZADA ---
@@ -202,17 +196,12 @@ export const updatePosition = asyncHandler(async (req, res) => {
     const snappedToRoute = turf.nearestPointOnLine(routeLineString, newPosition.coordinates);
     const newDistanceTraveled = snappedToRoute.properties.location;
 
-    
-
     // --- LÓGICA ANTI-SALTO PARA ROTAS SOBREPOSTAS ---
     // Impede que a posição "salte" para um ponto muito distante na rota (ex: da ida para a volta).
     const previousDistance = trip.distanceTraveled;
     const distanceChange = newDistanceTraveled - previousDistance;
     const MAX_JUMP_METERS = 750; // Um salto de 750m em 5s é muito improvável.
     
-    console.log(`--- UPDATE Trip ID: ${tripId} ---`);
-console.log(`Distância Anterior: ${previousDistance.toFixed(4)}, Nova Distância: ${newDistanceTraveled.toFixed(4)}`);
-
     // Se a mudança for negativa ou excessivamente grande, ignoramos a atualização de progresso.
     // Isso é uma heurística para evitar o salto para o trecho de volta prematuramente.
     const isAnUnlikelyJump = Math.abs(distanceChange * 1000) > MAX_JUMP_METERS;
@@ -233,18 +222,39 @@ console.log(`Distância Anterior: ${previousDistance.toFixed(4)}, Nova Distânci
             const alreadyReached = trip.stopsReached.some(s => s.stopName === stop.name);
             if (alreadyReached) continue;
 
-                    // Log para cada parada, antes de qualquer verificação
-        console.log(`Verificando Parada: '${stop.name}', Dist: ${stop.distanceFromStart.toFixed(4)}, Já alcançada: ${alreadyReached}`);
-                    const isPassedInInterval = stop.distanceFromStart > previousDistance && stop.distanceFromStart <= newDistanceTraveled;
-
-    // Log da decisão!
-        console.log(`  -> Condição de intervalo (${previousDistance.toFixed(4)} < ${stop.distanceFromStart.toFixed(4)} <= ${newDistanceTraveled.toFixed(4)})? Resultado: ${isPassedInInterval}`);
-
             // Condição 1: O progresso na rota ultrapassou a marca da parada?
-            if (stop.distanceFromStart > previousDistance && stop.distanceFromStart <= newDistanceTraveled) {
-                newlyReachedStops.push(stop);
-                console.log(`  -> SUCESSO: Parada '${stop.name}' será marcada como alcançada.`);
-            
+            if (trip.distanceTraveled >= stop.distanceFromStart) {
+                let wasReached = false;
+                
+                // Verificação de proximidade física
+                const physicalDistanceToStop = turf.distance(newPosition.coordinates, stop.location.coordinates, { units: 'meters' });
+                if (physicalDistanceToStop <= STOP_REACHED_RADIUS_METERS) {
+                    console.log(`Parada ${stop.name} reached em ${newPosition.coordinates} proximidade fisica`)
+                    wasReached = true;
+                } 
+                // Verificação de fallback (caminho cruzou a área da parada) (com fallback em caso de pular paradas, garante que todos
+                // os etahistories vão ser calculados, ex: b->c c->d, porém os tempos serão engansos, sem o fallback, caso ocorra um salto
+                // o eta vai ser só de b->d, porém realista)
+                else if (trip.lastPosition?.coordinates) {
+                    const lastCoords = trip.lastPosition.coordinates;
+                    const newCoords = newPosition.coordinates;
+                    // CORREÇÃO ESSENCIAL: Previne o erro da "linha de comprimento zero"
+                    if (lastCoords[0] !== newCoords[0] || lastCoords[1] !== newCoords[1]) {
+                        // CORREÇÃO ESSENCIAL: Garante um array puro para o Turf.js
+                        const movementSegment = turf.lineString([[...lastCoords], newCoords]);
+                        const stopPoint = turf.point(stop.location.coordinates);
+                        const distanceFromStopToPath = turf.pointToLineDistance(stopPoint, movementSegment, { units: 'meters' });
+                        console.log(`Checando se ${stop.name} esta no range de ${newPosition.coordinates} <- ${trip.lastPosition.coordinates}`)
+                        if (distanceFromStopToPath <= 40) {
+                            wasReached = true;
+                            console.log(`Parada ${stop.name} esta no range de ${newPosition.coordinates} <- ${trip.lastPosition.coordinates} e fisicamente proximo ao mov segment`)
+                        }
+                    }
+                }
+
+                if (wasReached) {
+                    newlyReachedStops.push(stop);
+                }
             }
         }
 
@@ -285,16 +295,16 @@ console.log(`Distância Anterior: ${previousDistance.toFixed(4)}, Nova Distânci
         });
 
     } else {
-        console.warn(`Salto de rota detectado. Mudança de ${distanceChange.toFixed(2)} km ignorada.`)
+        console.warn(`Salto de rota detectado. ${newPosition.coordinates} Mudança de ${distanceChange.toFixed(2)} km ignorada.`)
 
     }
     
 
     
-    return res.status(200).json({ 
-        message: 'Posição atualizada. (salto de rotas)',
-        stopETAs: trip.stopETAs,
-    });
+        return res.status(200).json({ 
+            message: 'Posição atualizada. (salto de rotas)',
+            stopETAs: trip.stopETAs,
+        });
 
 
 });
@@ -331,6 +341,7 @@ export const endTrip = asyncHandler(async (req, res) => {
                 // ...marcamos ela como alcançada.
                 await markStopAsReached(trip, lastStop, line, new Date());
                 console.log('fisicamente perto e marcada marcada')
+                console.log(lastStop.name)
             }
 
             const routeLineString = turf.lineString(line.routePath.coordinates);
