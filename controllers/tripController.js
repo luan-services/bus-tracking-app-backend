@@ -200,12 +200,20 @@ export const updatePosition = asyncHandler(async (req, res) => {
     // Impede que a posição "salte" para um ponto muito distante na rota (ex: da ida para a volta).
     const previousDistance = trip.distanceTraveled;
     const distanceChange = newDistanceTraveled - previousDistance;
-    const MAX_JUMP_METERS = 500; // Um salto de 500m em 5s é muito improvável.
+    const MAX_JUMP_MPS = 30; // velocidade máxima 108 km/h 
     const MAX_BACK_JUMP_METERS = -50
+
+    const lastUpdateTime = new Date(trip.currentPosition.updatedAt || trip.startTime);
+    const timeDiffSeconds = (now.getTime() - lastUpdateTime.getTime()) / 1000;
     
+    const allowedJumpMeters = Math.max(500, MAX_SPEED_MPS * timeDiffSeconds); // se a atualização é feita a cada 5s só permite um salto de 150m
+
+    // versão com apenas distancia const MAX_JUMP_METERS = 500; // Um salto de 500m em 5s é muito improvável.
+    // versão com apenas distancia (deixa passar mais casos de teste) const allowedJumpMeters = Math.abs(distanceChange * 1000) > MAX_JUMP_METERS
+
     // Se a mudança for negativa ou excessivamente grande, ignoramos a atualização de progresso.
     // Isso é uma heurística para evitar o salto para o trecho de volta prematuramente.
-    const isAnUnlikelyJump = Math.abs(distanceChange * 1000) > MAX_JUMP_METERS || distanceChange < MAX_BACK_JUMP_METERS ;
+    const isAnUnlikelyJump = Math.abs(distanceChange * 1000) > allowedJumpMeters || distanceChange * 1000 < MAX_BACK_JUMP_METERS ;
     
     if (!isAnUnlikelyJump) {
 
@@ -342,7 +350,8 @@ export const endTrip = asyncHandler(async (req, res) => {
             // Se o motorista está fisicamente perto da última parada ao finalizar...
             if (physicalDistanceToLastStop <= 40) { // Raio de 40m
                 // ...marcamos ela como alcançada.
-                await markStopAsReached(trip, lastStop, line, new Date());
+                const arrivalTimestamp = new Date(trip.currentPosition.updatedAt);
+                await markStopAsReached(trip, lastStop, line, arrivalTimestamp);
                 console.log('fisicamente perto e marcada marcada')
                 console.log(lastStop.name)
             }
