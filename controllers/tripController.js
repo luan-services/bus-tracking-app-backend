@@ -200,18 +200,16 @@ export const updatePosition = asyncHandler(async (req, res) => {
     // Impede que a posição "salte" para um ponto muito distante na rota (ex: da ida para a volta).
     const previousDistance = trip.distanceTraveled;
     const distanceChange = newDistanceTraveled - previousDistance;
-    const MAX_JUMP_METERS = 750; // Um salto de 750m em 5s é muito improvável.
+    const MAX_JUMP_METERS = 500; // Um salto de 500m em 5s é muito improvável.
+    const MAX_BACK_JUMP_METERS = -50
     
     // Se a mudança for negativa ou excessivamente grande, ignoramos a atualização de progresso.
     // Isso é uma heurística para evitar o salto para o trecho de volta prematuramente.
-    const isAnUnlikelyJump = Math.abs(distanceChange * 1000) > MAX_JUMP_METERS;
+    const isAnUnlikelyJump = Math.abs(distanceChange * 1000) > MAX_JUMP_METERS || distanceChange < MAX_BACK_JUMP_METERS ;
     
     if (!isAnUnlikelyJump) {
 
-        // 1. PRIMEIRO, calculamos os ETAs com base no estado ATUAL da viagem.
-        const stopETAs = await calculateETAs(line, newDistanceTraveled, trip.stopsReached);
-
-        // 2. AGORA, atualizamos o estado da viagem com a nova distância.
+        // 1. PRIMEIRO, atualizamos o estado da viagem com a nova distância.
         trip.distanceTraveled = newDistanceTraveled;
 
         const newlyReachedStops = [];
@@ -243,6 +241,7 @@ export const updatePosition = asyncHandler(async (req, res) => {
                         // CORREÇÃO ESSENCIAL: Garante um array puro para o Turf.js
                         const movementSegment = turf.lineString([[...lastCoords], newCoords]);
                         const stopPoint = turf.point(stop.location.coordinates);
+                        
                         const distanceFromStopToPath = turf.pointToLineDistance(stopPoint, movementSegment, { units: 'meters' });
                         console.log(`Checando se ${stop.name} esta no range de ${newPosition.coordinates} <- ${trip.lastPosition.coordinates}`)
                         if (distanceFromStopToPath <= 40) {
@@ -257,13 +256,17 @@ export const updatePosition = asyncHandler(async (req, res) => {
                 }
             }
         }
-
-       if (newlyReachedStops.length > 0) {
+        
+        // para impede de processar duas paradas ou mais por updatePosition, mude para === 1
+       if (newlyReachedStops.length > 0 ) {
             newlyReachedStops.sort((a, b) => a.distanceFromStart - b.distanceFromStart);
             for (const stopToProcess of newlyReachedStops) {
                 await markStopAsReached(trip, stopToProcess, line, now);
             }
         }
+
+        // 1.  calculamos os ETAs com base no estado ATUAL da viagem.
+        const stopETAs = await calculateETAs(line, newDistanceTraveled, trip.stopsReached);
 
         trip.stopETAs = stopETAs;
         trip.lastPosition = trip.currentPosition.toObject(); 

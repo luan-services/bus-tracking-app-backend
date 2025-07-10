@@ -53,7 +53,9 @@ export const createLine = asyncHandler(async (req, res) => {
         try {
             await precalculateStopData(line._id);
         } catch (error) {
-            console.error(`Falha ao pré-calcular dados para a linha ${line._id}:`, error);
+            console.error(error);
+            res.status(400);
+            throw new Error(`Falha ao pré-calcular dados para a linha ${line._id}:`);
         }
         const updatedLine = await Line.findById(line._id);
         return res.status(201).json(updatedLine);
