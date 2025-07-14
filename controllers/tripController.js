@@ -200,7 +200,7 @@ export const updatePosition = asyncHandler(async (req, res) => {
     // Impede que a posição "salte" para um ponto muito distante na rota (ex: da ida para a volta).
     const previousDistance = trip.distanceTraveled;
     const distanceChange = newDistanceTraveled - previousDistance;
-    const MAX_JUMP_MPS = 30; // velocidade máxima 108 km/h 
+    const MAX_SPEED_MPS = 30; // velocidade máxima 108 km/h 
     const MAX_BACK_JUMP_METERS = -50
 
     const lastUpdateTime = new Date(trip.currentPosition.updatedAt || trip.startTime);

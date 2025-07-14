@@ -33,6 +33,9 @@ app.use(cors());
 // usando library .json que permite enviar respostas .json
 app.use(express.json());
 
+// incluindo cookieparser para criação de cookies
+app.use(cookieParser());
+
 // criando os endereços e usando os routes
 app.use("/api/users", rateLimitHandler(15 * 60 * 1000, 100), userRoutes);
 app.use("/api/lines", rateLimitHandler(15 * 60 * 1000, 100), lineRoutes);

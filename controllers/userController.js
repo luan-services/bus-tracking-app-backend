@@ -64,7 +64,22 @@ export const loginUser = asyncHandler(async (req, res) => {
                 id: user.id,
                 role: user.role,
             },
-        }, process.env.ACCESS_TOKEN_SECRET, {expiresIn: "2h"})
+        }, process.env.ACCESS_TOKEN_SECRET, {expiresIn: "8h"})
+
+        const refreshToken = jwt.sign({ 
+            id: user.id 
+        }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "7d" });
+
+        // envia refreshToken via cookie seguro
+        res.cookie("refreshToken", refreshToken, {
+            httpOnly: true,
+            // secure true ou false diz se o cookie só podia ser enviado via https ou http; process.env.NODE_ENV === "production" retorna false caso a variavel NODE_ENV em .env seja diff de production   
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "strict", // impede que o cookie seja enviado por outros sites, se não adicionar isso, é necessáiro usar CORS
+            // se rememberMe for true, o cookie dura 7 dias, se for false ele é apagado ao fechar o site
+            maxAge: rememberMe ? 7 * 24 * 60 * 60 * 1000 : undefined,
+        });
+
 
         return res.json({ accessToken });
 
@@ -72,4 +87,78 @@ export const loginUser = asyncHandler(async (req, res) => {
         res.status(401)
         throw new Error("email or password invalid")
     }
+});
+
+//@desc Refresh token
+//@route POST /api/users/refresh
+//@access private
+export const refreshToken = asyncHandler(async (req, res) => {
+    // lê os cookies que vieram junto c o request
+    const cookies = req.cookies;  
+    // se não há cookie de refresh, jogan ovo erro
+    if (!cookies?.refreshToken) {
+        res.status(401);
+        throw new Error("No refresh token");
+    }
+
+    // salva o token dentro do cookie de refresh na const token
+    const token = cookies.refreshToken;
+    
+    let decoded;
+    // é necessário usar try catch porque precisamos do valor de decoded fora da função jwt.verify
+    try {
+        decoded = jwt.verify(token, process.env.REFRESH_TOKEN_SECRET);
+    } catch (err) {
+        res.status(403);
+        throw new Error("Invalid refresh token or session expired");
+    }
+
+    // checa se o usuário não foi deletado do banco de dados, para impedir usuários banidos de usarem o token.
+    const user = await User.findById(decoded.id);
+    if (!user) {
+        res.status(403);
+        throw new Error("User no longer exists");
+    }
+
+
+    // caso sim, gera um novo access token
+    const accessToken = jwt.sign(
+        {
+            user: {
+                username: user.username,
+                email: user.email,
+                id: user.id,
+                role: user.role,
+            },
+            
+        },
+        process.env.ACCESS_TOKEN_SECRET,
+        { expiresIn: "8h" }
+    );
+
+    // envia o novo token como resposta
+    return res.status(200).json({ accessToken });
+});
+
+
+//@desc Logout user (clear cookie)
+//@route POST /api/users/logout
+//@access private
+export const logoutUser = asyncHandler(async (req, res) => {
+
+    const cookies = req.cookies;  
+    // do not try to logout if there is no cookie
+    if (!cookies?.refreshToken) {
+        res.status(401);
+        throw new Error("No refresh token");
+    }
+    
+    // remove o cookie do refresh token (precisa botar as opções originais do cookie criado e o nome, se não não limpa)
+    res.clearCookie("refreshToken", {
+        httpOnly: true,
+        sameSite: "strict",
+        secure: process.env.NODE_ENV === "production",
+    });
+    // após realizar o log out, é necessário apagar o accessToken pois ele dura até 15min (isso é feito no frontend)
+    return res.status(200).json({ message: "Logged out successfully" });
 });
