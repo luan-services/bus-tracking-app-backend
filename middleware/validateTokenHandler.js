@@ -4,11 +4,27 @@ import jwt from "jsonwebtoken";
 // importando o model de user
 import {User} from "../models/userModel.js"
 
-// funcao pra checar se o token é valido e passar para próximo route
+// funcao pra checar se o token é valido e passar para próximo route, a abordagem checa cookies (enviando pelo navegador), ou headers (enviando por mobile ou por servidores)
+// essa abordagem serve para aplicações, porque requisições client-side (navegador) devem ser sempre feitas via cookie pois não podem acessar os dados.
 export const validateJwtToken = asyncHandler( async (req, res, next) => {
+        // variável p guardar o otken
         let token;
-         // tenta extrair o token do cookie chamado "accessToken", o middleware 'cookie-parser' popula o objeto req.cookies
-        token = req.cookies.accessToken;
+
+        // le o header do request e checa se existe um token nos headers
+        let authHeader = req.headers.Authorization || req.headers.authorization
+
+        // 1. se existe um header
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            // pega o token e remove "bearer" dele, deixando só o "das203d30kfdoskfois" (o token)
+            token = authHeader.split(" ")[1]
+            console.log("Token extraído do HEADER.");
+            
+        }  // 2. caso contrário, vê se existe um cookie
+        else if ((req.cookies && req.cookies.accessToken)) { // 
+            // tenta extrair o token do cookie chamado "accessToken", o middleware 'cookie-parser' popula o objeto req.cookies
+            token = req.cookies.accessToken;
+            console.log("Token extraído do COOKIE.");
+        }
 
         if (token) {
 
