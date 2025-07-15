@@ -48,7 +48,7 @@ export const loginUser = asyncHandler(async (req, res) => {
     const { email, password, rememberMe } = req.body;
 
     // caso não tenha sido preenchido
-    if (!email || !password || !rememberMe ) {
+    if (!email || !password ) {
         res.status(400)
         throw new Error("all fields are mandatory")
     }
@@ -196,4 +196,25 @@ export const logoutUser = asyncHandler(async (req, res) => {
 
     // após realizar o log out, é necessário apagar o accessToken pois ele dura até 15min (isso é feito no frontend)
     return res.status(200).json({ message: "Logged out successfully" });
+});
+
+
+//@desc Get logged user
+//@route GET /api/users/me
+//@access private
+export const getCurrentUser = asyncHandler(async (req, res) => {
+
+    if (!req.user) {
+        res.status(403);
+        throw new Error("User not Authorized.");
+    }
+
+    const user = await User.findById(req.user.id).select("-password");
+
+    if (!user) {
+        res.status(403);
+        throw new Error("User not Authorized.");
+    }
+
+    return res.status(200).json({ id: user.id, username: user.username, email: user.email, role: user.role });
 });
