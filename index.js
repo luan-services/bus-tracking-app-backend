@@ -6,6 +6,8 @@ import { rateLimitHandler } from "./middleware/rateLimitHandler.js";
 // import do banco de dados
 import { connectDatabase } from "./config/connectDatabase.js";
 
+import cookieParser from "cookie-parser";
+
 // import dos routes
 import userRoutes from "./routes/userRoutes.js";
 import lineRoutes from "./routes/lineRoutes.js";
@@ -27,8 +29,12 @@ connectDatabase();
 // iniciando express
 const app = express();
 
+const corsOptions = {
+  origin: process.env.FRONTEND_ALLOWED_URL ? process.env.FRONTEND_ALLOWED_URL : '*', // Diz ao navegador qual origem específica é permitida.
+  credentials: true,               // Diz ao navegador que é permitido receber cookies desta origem.
+};
 // library para selecionar quais endereços no frontend podem enviar requests para o backend, se não usado, o backend só pode ser chamado pela propria origem
-app.use(cors());
+app.use(cors(corsOptions));
 
 // usando library .json que permite enviar respostas .json
 app.use(express.json());

@@ -7,16 +7,15 @@ import {User} from "../models/userModel.js"
 // funcao pra checar se o token é valido e passar para próximo route
 export const validateJwtToken = asyncHandler( async (req, res, next) => {
         let token;
-        // le o header do request e checa se existe um token nos headers
-        let authHeader = req.headers.Authorization || req.headers.authorization
+         // tenta extrair o token do cookie chamado "accessToken", o middleware 'cookie-parser' popula o objeto req.cookies
+        token = req.cookies.accessToken;
 
-        if (authHeader && authHeader.startsWith("Bearer")) {
-            // pega o token e remove "bearer" dele, deixando só o "das203d30kfdoskfois" (o token)
-            token = authHeader.split(" ")[1]
+        if (token) {
 
             let decoded;
-            // chama a funcao verify da library do token, checa se o token e a senha do token batem
+
             try {
+                // verifica se o token é válido usando a chave secreta
                 decoded =  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET)
             } catch (err) {
                 // caso não, lança erro
@@ -25,7 +24,7 @@ export const validateJwtToken = asyncHandler( async (req, res, next) => {
             }
 
             // check para ver se o usuário não existem mais (caso em que o usuário é banido e seus dados apagados, mas ainda possui um token por 15min)
-            const user = await User.findById(decoded.user.id);
+            const user = await User.findById(decoded.user.id).select("-password");
             if (!user) {
                 res.status(401);
                 throw new Error("User not found or no longer exists");

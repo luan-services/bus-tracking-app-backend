@@ -45,12 +45,12 @@ export const registerUser = asyncHandler(async (req, res) => {
 //@route POST /api/users/login
 //@access public
 export const loginUser = asyncHandler(async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password, rememberMe } = req.body;
 
     // caso não tenha sido preenchido
-    if (!email || !password) {
+    if (!email || !password || !rememberMe ) {
         res.status(400)
-        throw new Error("All fields are mandatory")
+        throw new Error("all fields are mandatory")
     }
 
     const user = await User.findOne({ email });
@@ -70,18 +70,36 @@ export const loginUser = asyncHandler(async (req, res) => {
             id: user.id 
         }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "7d" });
 
+        // envia accessToken via cookie seguro
+        res.cookie("accessToken", accessToken, {
+            httpOnly: true,
+            // secure true ou false diz se o cookie só podia ser enviado via https ou http; process.env.NODE_ENV === "production" retorna false caso a variavel NODE_ENV em .env seja diff de production   
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax", // impede que o cookie seja enviado por outros sites, se não adicionar isso, é necessáiro usar CORS
+            // se rememberMe for true, o cookie dura 7 dias, se for false ele é apagado ao fechar o site
+            maxAge: rememberMe ? 8 * 60 * 60 * 1000 : undefined, // 8hrs
+        });
+
         // envia refreshToken via cookie seguro
         res.cookie("refreshToken", refreshToken, {
             httpOnly: true,
             // secure true ou false diz se o cookie só podia ser enviado via https ou http; process.env.NODE_ENV === "production" retorna false caso a variavel NODE_ENV em .env seja diff de production   
             secure: process.env.NODE_ENV === "production",
-            sameSite: "strict", // impede que o cookie seja enviado por outros sites, se não adicionar isso, é necessáiro usar CORS
+            sameSite: "lax", // impede que o cookie seja enviado por outros sites, se não adicionar isso, é necessáiro usar CORS
             // se rememberMe for true, o cookie dura 7 dias, se for false ele é apagado ao fechar o site
             maxAge: rememberMe ? 7 * 24 * 60 * 60 * 1000 : undefined,
         });
 
 
-        return res.json({ accessToken });
+        return res.json({
+            message: "User logged in successfully",
+            user: {
+                id: user.id,
+                username: user.username,
+                email: user.email,
+                role: user.role
+            }
+        });
 
     } else {
         res.status(401)
@@ -122,7 +140,7 @@ export const refreshToken = asyncHandler(async (req, res) => {
 
 
     // caso sim, gera um novo access token
-    const accessToken = jwt.sign(
+    const newAccessToken = jwt.sign(
         {
             user: {
                 username: user.username,
@@ -136,8 +154,18 @@ export const refreshToken = asyncHandler(async (req, res) => {
         { expiresIn: "8h" }
     );
 
+    // envia accessToken via cookie seguro
+    res.cookie("accessToken", newAccessToken, {
+        httpOnly: true,
+        // secure true ou false diz se o cookie só podia ser enviado via https ou http; process.env.NODE_ENV === "production" retorna false caso a variavel NODE_ENV em .env seja diff de production   
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax", // impede que o cookie seja enviado por outros sites, se não adicionar isso, é necessáiro usar CORS
+        // se rememberMe for true, o cookie dura 7 dias, se for false ele é apagado ao fechar o site
+        maxAge: 8 * 60 * 60 * 1000, // 8hrs
+    });
+
     // envia o novo token como resposta
-    return res.status(200).json({ accessToken });
+    return res.status(200).json({ message: "Token updated successfully" });
 });
 
 
@@ -148,7 +176,7 @@ export const logoutUser = asyncHandler(async (req, res) => {
 
     const cookies = req.cookies;  
     // do not try to logout if there is no cookie
-    if (!cookies?.refreshToken) {
+    if (!cookies?.refreshToken && !cookies?.accessToken) {
         res.status(401);
         throw new Error("No refresh token");
     }
@@ -156,9 +184,16 @@ export const logoutUser = asyncHandler(async (req, res) => {
     // remove o cookie do refresh token (precisa botar as opções originais do cookie criado e o nome, se não não limpa)
     res.clearCookie("refreshToken", {
         httpOnly: true,
-        sameSite: "strict",
+        sameSite: "lax",
         secure: process.env.NODE_ENV === "production",
     });
+    // remove o cookie do accessToken
+    res.clearCookie("accessToken", {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+    });
+
     // após realizar o log out, é necessário apagar o accessToken pois ele dura até 15min (isso é feito no frontend)
     return res.status(200).json({ message: "Logged out successfully" });
 });
