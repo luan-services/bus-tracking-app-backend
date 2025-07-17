@@ -1,21 +1,29 @@
-import express from "express";
-import { loginUser, registerUser, refreshToken, logoutUser, getCurrentUser } from "../controllers/userController.js";
-import { rateLimitHandler } from "../middleware/rateLimitHandler.js";
-// importa middleware de validação pois o route /me é privado precisa saber quem está logado.
+import express from "express"
+// importando os controllers de Users
+import { getAllUsers, getUser, currentUser, createUser, updateUser, deleteUser } from "../controllers/userController.js";
+// importa o middleware de validação do JOI
+import { validateJoiSchema } from "../middleware/validateJoiSchema.js";
+// importa o schema do JOI
+import { userCreateSchema, userUpdateSchema, userSearchSchema } from "../models/joi_models/userValidateModel.js";
+// importa middleware de validação jwt
 import { validateJwtToken } from "../middleware/validateTokenHandler.js";
 
+// importa o router do express
 const router = express.Router();
 
+// valida sessão antes de tudo
+router.use(validateJwtToken)
 
-router.get("/me", validateJwtToken, getCurrentUser);
+router.get("/", getAllUsers);
 
-router.post("/register", rateLimitHandler(10 * 60 * 1000, 5), registerUser);
+router.get("/:id", validateJoiSchema(userSearchSchema, "params"), getUser);
 
-router.post("/login", rateLimitHandler(10 * 60 * 1000, 5), loginUser);
+router.get("/current/me", currentUser);
 
-router.post("/refresh", rateLimitHandler(10 * 60 * 1000, 5), refreshToken);
+router.post("/", validateJoiSchema(userCreateSchema, "body"), createUser);
 
-// route para logout
-router.post("/logout", rateLimitHandler(10 * 60 * 1000, 5), logoutUser);
+router.patch("/:id", validateJoiSchema(userSearchSchema, "params"), validateJoiSchema(userUpdateSchema, "body"), updateUser);
 
-export default router;
+router.delete("/:id", validateJoiSchema(userSearchSchema, "params"), deleteUser);
+
+export default router

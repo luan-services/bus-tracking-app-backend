@@ -9,6 +9,7 @@ import { connectDatabase } from "./config/connectDatabase.js";
 import cookieParser from "cookie-parser";
 
 // import dos routes
+import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import lineRoutes from "./routes/lineRoutes.js";
 import tripRoutes from "./routes/tripRoutes.js";
@@ -30,7 +31,7 @@ connectDatabase();
 const app = express();
 
 const corsOptions = {
-  origin: process.env.FRONTEND_ALLOWED_URL ? process.env.FRONTEND_ALLOWED_URL : '*', // Diz ao navegador qual origem específica é permitida.
+  origin: process.env.NODE_ENV === "production" ? (process.env.FRONTEND_ALLOWED_URL ? process.env.FRONTEND_ALLOWED_URL : '*') : '*', // Diz ao navegador qual origem específica é permitida.
   credentials: true,               // Diz ao navegador que é permitido receber cookies desta origem.
 };
 // library para selecionar quais endereços no frontend podem enviar requests para o backend, se não usado, o backend só pode ser chamado pela propria origem
@@ -43,6 +44,7 @@ app.use(express.json());
 app.use(cookieParser());
 
 // criando os endereços e usando os routes
+app.use("/api/auth", rateLimitHandler(15 * 60 * 1000, 100), authRoutes)
 app.use("/api/users", rateLimitHandler(15 * 60 * 1000, 100), userRoutes);
 app.use("/api/lines", rateLimitHandler(15 * 60 * 1000, 100), lineRoutes);
 app.use("/api/trips", rateLimitHandler(15 * 60 * 1000, 100), tripRoutes);

@@ -1,208 +1,70 @@
-import asyncHandler from "express-async-handler";
-import jwt from "jsonwebtoken";
-import bcrypt from "bcryptjs";
+import asyncHandler from "express-async-handler"
 
-import { User } from "../models/userModel.js";
+import { User } from "../models/userModel.js"
 
-//@desc Register user
-//@route POST /api/users/register
-//@access public
-export const registerUser = asyncHandler(async (req, res) => {
-    const { username, email, password } = req.body;
+// importando library de criptografia de senhas
+import bcrypt from "bcrypt"
 
-    // apesar do mongoose já dar levantar erro se o email já existir no db, é boa pratica usar um tester:
-    const userExists = await User.findOne({ email });
-    if (userExists) {
-        res.status(400);
-        throw new Error('User already exists');
-    }   
-
-    // realiza o hashing da senha
-    const hashedPassword = await bcrypt.hash(password, 10);
-    // cria usuário
-    const user = await User.create({ 
-        username: username, 
-        email: email, 
-        password: hashedPassword,
-        role: "user"
-    });
-
-    // cria um token, precisa incluir o conteudo do token (os dados do usuário), a senha do token (.env), e o tempo que expira
-    const accessToken = jwt.sign({
-        user: {
-            username: user.username,
-            email: user.email,
-            id: user.id,
-            role: user.role
-        },
-    }, process.env.ACCESS_TOKEN_SECRET, {expiresIn: "2h"})
-
-    // retorna token de acesso
-    return res.status(201).json({ accessToken });
-});
-
-//@desc Login user
-//@route POST /api/users/login
-//@access public
-export const loginUser = asyncHandler(async (req, res) => {
-    const { email, password, rememberMe } = req.body;
-
-    // caso não tenha sido preenchido
-    if (!email || !password ) {
-        res.status(400)
-        throw new Error("all fields are mandatory")
-    }
-
-    const user = await User.findOne({ email });
-
-    if (user && (await bcrypt.compare(password, user.password))) {
-        // cria um token, precisa incluir o conteudo do token (os dados do usuário), a senha do token (.env), e o tempo que expira
-        const accessToken = jwt.sign({
-            user: {
-                username: user.username,
-                email: user.email,
-                id: user.id,
-                role: user.role,
-            },
-        }, process.env.ACCESS_TOKEN_SECRET, {expiresIn: "8h"})
-
-        const refreshToken = jwt.sign({ 
-            id: user.id 
-        }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "7d" });
-
-        // envia accessToken via cookie seguro
-        res.cookie("accessToken", accessToken, {
-            httpOnly: true,
-            // secure true ou false diz se o cookie só podia ser enviado via https ou http; process.env.NODE_ENV === "production" retorna false caso a variavel NODE_ENV em .env seja diff de production   
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax", // impede que o cookie seja enviado por outros sites, se não adicionar isso, é necessáiro usar CORS
-            // se rememberMe for true, o cookie dura 7 dias, se for false ele é apagado ao fechar o site
-            maxAge: rememberMe ? 8 * 60 * 60 * 1000 : undefined, // 8hrs
-        });
-
-        // envia refreshToken via cookie seguro
-        res.cookie("refreshToken", refreshToken, {
-            httpOnly: true,
-            // secure true ou false diz se o cookie só podia ser enviado via https ou http; process.env.NODE_ENV === "production" retorna false caso a variavel NODE_ENV em .env seja diff de production   
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax", // impede que o cookie seja enviado por outros sites, se não adicionar isso, é necessáiro usar CORS
-            // se rememberMe for true, o cookie dura 7 dias, se for false ele é apagado ao fechar o site
-            maxAge: rememberMe ? 7 * 24 * 60 * 60 * 1000 : undefined,
-        });
-
-
-        return res.json({
-            message: "User logged in successfully",
-            user: {
-                id: user.id,
-                username: user.username,
-                email: user.email,
-                role: user.role
-            }
-        });
-
-    } else {
-        res.status(401)
-        throw new Error("email or password invalid")
-    }
-});
-
-//@desc Refresh token
-//@route POST /api/users/refresh
-//@access private
-export const refreshToken = asyncHandler(async (req, res) => {
-    // lê os cookies que vieram junto c o request
-    const cookies = req.cookies;  
-    // se não há cookie de refresh, jogan ovo erro
-    if (!cookies?.refreshToken) {
-        res.status(401);
-        throw new Error("No refresh token");
-    }
-
-    // salva o token dentro do cookie de refresh na const token
-    const token = cookies.refreshToken;
-    
-    let decoded;
-    // é necessário usar try catch porque precisamos do valor de decoded fora da função jwt.verify
-    try {
-        decoded = jwt.verify(token, process.env.REFRESH_TOKEN_SECRET);
-    } catch (err) {
+//@desc Get all users data
+//@route GET /api/users
+//@access private (admin)
+export const getAllUsers = asyncHandler(async (req, res) => {
+    if (!req.user) {
         res.status(403);
-        throw new Error("Invalid refresh token or session expired");
+        throw new Error("User not Authorized.");
     }
 
-    // checa se o usuário não foi deletado do banco de dados, para impedir usuários banidos de usarem o token.
-    const user = await User.findById(decoded.id);
+    const currentUser = await User.findById(req.user.id).select("-password");
+
+    if (!currentUser || currentUser.role != 'admin') {
+        res.status(403);
+        throw new Error("User not Authorized.");
+    }
+
+    // procura o user no banco de dados baseado no model (todas essas funções vem diretamente do schema do mangoose, que vem com funções built-in para gerenciar o db)
+    const users = await User.find();
+
+    if (!users) {
+        res.status(404);
+        throw new Error("No user found");
+    }
+    
+    // envia uma resposta ao frontend com os dados do contato
+    return res.status(200).json(users);
+})
+
+//@desc Get a specific user data
+//@route GET /api/users/:id
+//@access private (admin)
+export const getUser = asyncHandler(async (req, res) => {
+    if (!req.user) {
+        res.status(403);
+        throw new Error("User not Authorized.");
+    }
+
+    const currentUser = await User.findById(req.user.id).select("-password");
+
+    if (!currentUser || currentUser.role != 'admin') {
+        res.status(403);
+        throw new Error("User not Authorized.");
+    }
+
+    // procura o user no banco de dados baseado no model (todas essas funções vem diretamente do schema do mangoose, que vem com funções built-in para gerenciar o db)
+    const user = await User.findById(req.params.id);
+
     if (!user) {
-        res.status(403);
-        throw new Error("User no longer exists");
+        res.status(404);
+        throw new Error("User not found");
     }
 
+    // envia uma resposta ao frontend com os dados do contato
+    return res.status(200).json(user);
+})
 
-    // caso sim, gera um novo access token
-    const newAccessToken = jwt.sign(
-        {
-            user: {
-                username: user.username,
-                email: user.email,
-                id: user.id,
-                role: user.role,
-            },
-            
-        },
-        process.env.ACCESS_TOKEN_SECRET,
-        { expiresIn: "8h" }
-    );
-
-    // envia accessToken via cookie seguro
-    res.cookie("accessToken", newAccessToken, {
-        httpOnly: true,
-        // secure true ou false diz se o cookie só podia ser enviado via https ou http; process.env.NODE_ENV === "production" retorna false caso a variavel NODE_ENV em .env seja diff de production   
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax", // impede que o cookie seja enviado por outros sites, se não adicionar isso, é necessáiro usar CORS
-        // se rememberMe for true, o cookie dura 7 dias, se for false ele é apagado ao fechar o site
-        maxAge: 8 * 60 * 60 * 1000, // 8hrs
-    });
-
-    // envia o novo token como resposta
-    return res.status(200).json({ message: "Token updated successfully" });
-});
-
-
-//@desc Logout user (clear cookie)
-//@route POST /api/users/logout
-//@access private
-export const logoutUser = asyncHandler(async (req, res) => {
-
-    const cookies = req.cookies;  
-    // do not try to logout if there is no cookie
-    if (!cookies?.refreshToken && !cookies?.accessToken) {
-        res.status(401);
-        throw new Error("No refresh token");
-    }
-    
-    // remove o cookie do refresh token (precisa botar as opções originais do cookie criado e o nome, se não não limpa)
-    res.clearCookie("refreshToken", {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-    });
-    // remove o cookie do accessToken
-    res.clearCookie("accessToken", {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-    });
-
-    // após realizar o log out, é necessário apagar o accessToken pois ele dura até 15min (isso é feito no frontend)
-    return res.status(200).json({ message: "Logged out successfully" });
-});
-
-
-//@desc Get logged user
-//@route GET /api/users/me
-//@access private
-export const getCurrentUser = asyncHandler(async (req, res) => {
+//@desc Get current user info
+//@route GET /api/users/current/me
+//@access private (driver, admin)
+export const currentUser = asyncHandler(async (req, res) => {
 
     if (!req.user) {
         res.status(403);
@@ -211,10 +73,130 @@ export const getCurrentUser = asyncHandler(async (req, res) => {
 
     const user = await User.findById(req.user.id).select("-password");
 
-    if (!user) {
+    if (!user || (user.role != 'user' && user.role != 'admin')) {
         res.status(403);
         throw new Error("User not Authorized.");
     }
 
     return res.status(200).json({ id: user.id, username: user.username, email: user.email, role: user.role });
-});
+})
+
+//@desc Create a user
+//@route POST /api/users
+//@access private (admin)
+export const createUser = asyncHandler(async (req, res) => {
+    if (!req.user) {
+        res.status(403);
+        throw new Error("User not Authorized.");
+    }
+
+    const currentUser = await User.findById(req.user.id).select("-password");
+
+    if (!currentUser || currentUser.role != 'admin') {
+        res.status(403);
+        throw new Error("User not Authorized.");
+    }
+    
+    // passa os dados do request para constantes
+    const {username, email, password, role} = req.body
+
+    if (!username || !email || !password) {
+        res.status(400);
+        throw new Error("Some fields are missing.");
+    }
+
+    // apesar do mongoose já dar levantar erro se o email já existir no db, é boa pratica usar um tester:
+    const userExists = await User.findOne({ email });
+    if (userExists) {
+        res.status(400);
+        throw new Error('User already exists');
+    }   
+
+    // hashing da senha (12 é o numero de salt_rounds (qts vezes o hashing é aplicado))
+    const hashedPassword = await bcrypt.hash(password, 10)
+
+    const user = await User.create({
+        username: username,
+        email: email,
+        password: hashedPassword,
+        role: role ? role : 'user'
+    });
+
+    console.log(`User created ${user}`)
+    
+    if (user) {
+        // envia uma resposta json com o id do user e o email
+        return res.status(201).json({_id: user.id, email: user.email});
+    } else {
+        res.status(400)
+        throw new Error("User data is not valid")
+    }
+})
+
+//@desc Update a specific user data
+//@route PATCH /api/users/:id
+//@access private (admin)
+export const updateUser = asyncHandler(async (req, res) => {
+    if (!req.user) {
+        res.status(403);
+        throw new Error("User not Authorized.");
+    }
+
+    const currentUser = await User.findById(req.user.id).select("-password");
+
+    if (!currentUser || currentUser.role != 'admin') {
+        res.status(403);
+        throw new Error("User not Authorized.");
+    }
+    
+
+    // hashing da senha (12 é o numero de salt_rounds (qts vezes o hashing é aplicado))
+    let hashedPassword;
+
+    if (req.body.password) {
+        hashedPassword = await bcrypt.hash(req.body.password, 10)
+        req.body.password = hashedPassword
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(req.params.id, 
+            req.body, { new: true } // returns the updated document
+    );
+
+    console.log(`User updated ${updatedUser}`)
+    
+    if (updatedUser) {
+        // envia uma resposta json com o id do user e o email
+        return res.status(201).json({_id: updatedUser.id, email: updatedUser.email});
+    } else {
+        res.status(400)
+        throw new Error("User data is not valid")
+    }
+})
+
+//@desc Delete a specific user data
+//@route DELETE /api/users/:id
+//@access private (admin)
+export const deleteUser = asyncHandler(async (req, res) => {
+    if (!req.user) {
+        res.status(403);
+        throw new Error("User not Authorized.");
+    }
+
+    const currentUser = await User.findById(req.user.id).select("-password");
+
+    if (!currentUser || currentUser.role != 'admin') {
+        res.status(403);
+        throw new Error("User not Authorized.");
+    }
+
+    const user = await User.findById(req.params.id);
+    // se não existe lança erro
+    if (!user) {
+        res.status(404);
+        throw new Error("User not found");
+    }
+    // deleta o contato (todas essas funções vem diretamente do schema do mangoose, que vem com funções built-in para gerenciar o db)
+    await user.deleteOne();
+    // envia uma resposta ao frontend dizendo q o contato foi deletado
+    return res.status(200).json({ message: `Deleted user ${req.params.id}` });
+})
