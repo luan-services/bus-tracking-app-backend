@@ -31,7 +31,7 @@ connectDatabase();
 const app = express();
 
 const corsOptions = {
-  origin: process.env.NODE_ENV === "production" ? (process.env.FRONTEND_ALLOWED_URL ? process.env.FRONTEND_ALLOWED_URL : '*') : '*', // Diz ao navegador qual origem específica é permitida.
+  origin: process.env.NODE_ENV === "production" ? (process.env.FRONTEND_ALLOWED_URL ? process.env.FRONTEND_ALLOWED_URL : '*') : ['http://localhost:3000', '*'], // Diz ao navegador qual origem específica é permitida.
   credentials: true,               // Diz ao navegador que é permitido receber cookies desta origem.
 };
 // library para selecionar quais endereços no frontend podem enviar requests para o backend, se não usado, o backend só pode ser chamado pela propria origem

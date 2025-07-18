@@ -51,7 +51,7 @@ export const loginUser = asyncHandler(async (req, res) => {
     const {email, password, rememberMe} = req.body
     
     // caso não tenha sido preenchido
-    if (!email || !password || !rememberMe) {
+    if (!email || !password) {
         res.status(400)
         throw new Error("All fields are mandatory")
     }
