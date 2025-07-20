@@ -34,11 +34,11 @@ export const userCreateSchema = Joi.object({
     }),
     role: Joi.string().valid('admin', 'user').default('user').messages({
         'any.only': 'Role must be either "admin" or "user"',
-        }),
+    }),
 });
 
 export const userUpdateSchema = Joi.object({
-    username: Joi.string().max(12).messages({
+    name: Joi.string().max(12).messages({
         'string.empty': 'Name is required', // mensagens custom para cada erro, se não adicionadas, o joi lança mensagens padrao
         'any.required': 'Name is required',
         'string.max': 'Name must be at most {#limit} characters'
