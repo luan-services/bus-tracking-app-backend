@@ -14,7 +14,7 @@ import jwt from "jsonwebtoken"
 export const registerUser = asyncHandler(async (req, res) => {
 
     // passa os dados do request para constantes
-    const {username, email, password} = req.body
+    const {name, last_name, email, code, cpf, password} = req.body
 
     // hashing da senha (12 é o numero de salt_rounds (qts vezes o hashing é aplicado))
     const hashedPassword = await bcrypt.hash(password, 10)
@@ -28,8 +28,11 @@ export const registerUser = asyncHandler(async (req, res) => {
 
     // Usa o model do mangoose para criar uma row (um objeto) de usuario  (todas essas funções vem diretamente do schema do mangoose, que vem com funções built-in para gerenciar o db)
     const user = await User.create({
-        username: username,
+        name: name,
+        last_name: last_name,
         email: email,
+        code: code,
+        cpf: cpf,
         password: hashedPassword,
     });
     
@@ -64,7 +67,7 @@ export const loginUser = asyncHandler(async (req, res) => {
         const accessToken = jwt.sign(
             {
                 user: {
-                    username: user.username,
+                    name: user.name,
                     email: user.email,
                     id: user.id,
                     role: user.role,
@@ -108,10 +111,11 @@ export const loginUser = asyncHandler(async (req, res) => {
         return res.json({
             message: "User logged in successfully",
             user: {
-                id: user.id,
-                username: user.username,
+                name: user.name,
+                last_name: user.last_name,
                 email: user.email,
-                role: user.role
+                code: user.code,
+                cpf: user.cpf,
             }
         });
 
@@ -157,7 +161,7 @@ export const refreshToken = asyncHandler(async (req, res) => {
     const newAccessToken = jwt.sign(
         {
             user: {
-                username: user.username,
+                name: user.name,
                 email: user.email,
                 id: user.id,
                 role: user.role,
