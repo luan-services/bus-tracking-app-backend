@@ -78,7 +78,7 @@ export const currentUser = asyncHandler(async (req, res) => {
         throw new Error("User not Authorized.");
     }
 
-    return res.status(200).json({ id: user.id, username: user.username, email: user.email, role: user.role });
+    return res.status(200).json({ id: user.id, name: user.name, last_name: user.last_name, email: user.email, code: user.code, cpf: user.cpf, role: user.role });
 })
 
 //@desc Create a user
@@ -98,9 +98,9 @@ export const createUser = asyncHandler(async (req, res) => {
     }
     
     // passa os dados do request para constantes
-    const {username, email, password, role} = req.body
+    const {name, last_name, email, code, cpf, password} = req.body
 
-    if (!username || !email || !password) {
+    if (!name || !last_name || !email || !code || !cpf || !password) {
         res.status(400);
         throw new Error("Some fields are missing.");
     }
@@ -116,17 +116,19 @@ export const createUser = asyncHandler(async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10)
 
     const user = await User.create({
-        username: username,
+        name: name,
+        last_name: last_name,
         email: email,
+        code: code,
+        cpf: cpf,
         password: hashedPassword,
-        role: role ? role : 'user'
     });
 
     console.log(`User created ${user}`)
     
     if (user) {
         // envia uma resposta json com o id do user e o email
-        return res.status(201).json({_id: user.id, email: user.email});
+        return res.status(201).json({id: user.id, email: user.email});
     } else {
         res.status(400)
         throw new Error("User data is not valid")
