@@ -67,6 +67,23 @@ export const startTrip = asyncHandler(async (req, res) => {
     return res.status(201).json({ message: "Viagem iniciada com sucesso", trip: trip });
 });
 
+//@desc Get status if user has an active trip
+//@route GET /api/trips/user-status/
+//@access private (driver, admin)
+// --- CONTROLLER startTrip (COM VALIDAÇÃO DE PROXIMIDADE) ---
+export const getTripStatus = asyncHandler(async (req, res) => {
+    if (!req.user || (req.user.role !== "driver" && req.user.role !== "admin")) {
+        res.status(403);
+        throw new Error("Usuário não autorizado.");
+    }
+    const existingTrip = await Trip.findOne({ driver: req.user.id, isActive: true });
+    if (existingTrip) {
+        return res.status(200).json({ message: "Usuário possui uma trip ativa", trip_id: existingTrip.id });
+    } else {
+        return res.status(201).json({ message: "Usuário não possui trip ativa" });
+    }
+});
+
 
 //@desc Update position on a trip
 //@route PATCH /api/trips/:tripid/position
