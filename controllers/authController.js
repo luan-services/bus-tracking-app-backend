@@ -106,6 +106,7 @@ export const loginUser = asyncHandler(async (req, res) => {
             maxAge: rememberMe ? 7 * 24 * 60 * 60 * 1000 : undefined,
         });
 
+        console.log(accessToken)
 
         // passa o user como respossta json
         return res.json({
@@ -121,7 +122,7 @@ export const loginUser = asyncHandler(async (req, res) => {
 
     } else {
         res.status(401)
-        throw new Error("email or password not valid")
+        throw new Error("Email or password not valid")
     }
         
 })

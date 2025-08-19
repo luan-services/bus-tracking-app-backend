@@ -31,7 +31,7 @@ connectDatabase();
 const app = express();
 
 const corsOptions = {
-  origin: process.env.NODE_ENV === "production" ? (process.env.FRONTEND_ALLOWED_URL ? process.env.FRONTEND_ALLOWED_URL : '*') : ['http://localhost:3000', '*'], // Diz ao navegador qual origem específica é permitida.
+  origin: process.env.NODE_ENV === "production" ? (process.env.FRONTEND_ALLOWED_URL ? process.env.FRONTEND_ALLOWED_URL : '*') : ['http://localhost:3000','http://localhost:8000', '*'], // Diz ao navegador qual origem específica é permitida.
   credentials: true,               // Diz ao navegador que é permitido receber cookies desta origem.
 };
 // library para selecionar quais endereços no frontend podem enviar requests para o backend, se não usado, o backend só pode ser chamado pela propria origem
@@ -66,19 +66,18 @@ const io = new Server(server, {
 // registra server io para uso nos controllers
 app.set('io', io);
 
-// são os listeners que definem o que acontece quando um cliente se conecta ao socket, o client pode se conectar usando socket.emit("joinTrip", "trip123");
+// são os listeners que definem o que acontece quando um cliente se conecta ao socket
 io.on('connection', (socket) => {
     console.log('Cliente conectado:', socket.id);
 
-    // quando o client se conecta, o servidor recebe esse evento
+    // fica ouvindo uma 'mensagem' 'joinTrip' pro cliente especifico que acabou de entrar
     socket.on('joinTrip', (tripId) => {
-        // ele entra numa sala existente, onde o cliente pode atualizar dados via commands post, e todos conectados à sala vão receber atualizações diretamente no frontend
-        // essas atualizações são dados, no nosso caso, é a posição do cliente (onibus), que vai ser atualizada na tela dos usuários
+        // pega o socket do cliente e coloca ele na sala especificada
         socket.join(tripId);
         console.log(`Socket ${socket.id} entrou na sala da trip ${tripId}`);
     });
 
-    // disconecta o cliente da sala
+    // fica ouvindo uma 'mensagem' disconect do client especifico
     socket.on('disconnect', () => {
         console.log('Cliente desconectado:', socket.id);
     });

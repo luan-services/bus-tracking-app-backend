@@ -156,7 +156,7 @@ export const updatePosition = asyncHandler(async (req, res) => {
                     console.log(`Parada ${stop.name} reached em ${newPosition.coordinates} proximidade fisica`)
                     wasReached = true;
                 } 
-                // Verificação de fallback (caminho cruzou a área da parada) (com fallback em caso de pular paradas, garante que todos
+                // Verificação de fallback (caminho (em linha reta) cruzou a área da parada) (com fallback em caso de pular paradas, garante que todos
                 // os etahistories vão ser calculados, ex: b->c c->d, porém os tempos serão engansos, sem o fallback, caso ocorra um salto
                 // o eta vai ser só de b->d, porém realista)
                 else if (trip.lastPosition?.coordinates) {
@@ -227,7 +227,6 @@ export const updatePosition = asyncHandler(async (req, res) => {
         console.warn(`Salto de rota detectado. ${newPosition.coordinates} Mudança de ${distanceChange.toFixed(2)} km ignorada.`)
 
     }
-    
 
     
         return res.status(200).json({ 
